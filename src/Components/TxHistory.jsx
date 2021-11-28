@@ -16,6 +16,8 @@ function TxHistory({ pubKey, txs, loadMoreBtnClick }) {
                     <tr>
                         <th scope="col">Hash</th>
                         <th scope="col">DateTime</th>
+                        <th scope="col">Balance Change</th>
+                        <th scope="col">Fee</th>
                         <th scope="col">Status</th>
                         <th scope="col">TX</th>
                     </tr>
@@ -25,6 +27,12 @@ function TxHistory({ pubKey, txs, loadMoreBtnClick }) {
                         <tr key={tx.hash}>
                             <th scope="row">{shortString(tx.hash)}</th>
                             <td>{moment.unix(tx.datetime).format("MM/DD/YYYY HH:ss")}</td>
+                            <td>
+                                {composeBalanceString(tx.balances)}
+                            </td>
+                            <td>
+                                {`${tx.fee} SOL`}
+                            </td>
                             <td>{tx.status}</td>
                             <td>
                                 <a href={`https://solscan.io/tx/${tx.hash}`} target="_blank" rel="noreferrer">View</a>
@@ -43,5 +51,7 @@ function TxHistory({ pubKey, txs, loadMoreBtnClick }) {
 }
 
 const shortString = (str, start = 4, end = 4) => `${str.slice(0, start)}...${str.slice(str.length - end, str.length)}`;
+
+const composeBalanceString = (balances) => balances?.map(x => `${x.changeAmount > 0 ? "+" : "-"}${Math.abs(x.changeAmount)} ${x.ticker}`).join(" / ");
 
 export default TxHistory;
