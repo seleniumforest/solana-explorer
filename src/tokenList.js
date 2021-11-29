@@ -6,7 +6,8 @@ export const getTokens = async () => {
     if (cache)
         return cache;
 
-    let response = await axios.get("https://decommas.io/gears/app/api/tokens");
+    //https://decommas.io/gears/app/api/tokens 
+    let response = await axios.get("/tokenlist.json");
     let tokenlist = response.data.map(x => ({
         address: x.address,
         symbol: x.symbol
