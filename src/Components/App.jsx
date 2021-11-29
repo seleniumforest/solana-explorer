@@ -4,8 +4,10 @@ import * as solanaWeb3 from '@solana/web3.js';
 import Account from './Account';
 import TxHistory from './TxHistory';
 import { getTokens } from '../tokenList';
+import BigNumber from 'bignumber.js';
 
 const connection = new solanaWeb3.Connection("https://free.rpcpool.com/");
+const tokenProgramAccount = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA";
 
 const App = () => {
 
@@ -55,15 +57,17 @@ const fetchTxs = async (pubKey, limit, lastTxHash) => {
         signatures.map(x => x.signature),
         "finalized");
 
+    let ownedAccounts = await connection.getTokenAccountsByOwner(pubKey, { programId: new solanaWeb3.PublicKey(tokenProgramAccount) });
+
     let txs = []
     for (const tx of transactions) {
-        let balances = await calcBalanceChanges(tx, pubKey);
-        console.log(balances);  
+        let balanceChanges = await calcBalanceChanges(tx, pubKey, ownedAccounts);
+
         txs.push({
             hash: tx.transaction.signatures[0],
             datetime: tx.blockTime,
             status: tx.meta.err ? "failed" : "success",
-            balances: balances.filter(x => x.changeAmount !== 0),
+            balances: balanceChanges,
             fee: tx.meta.fee / solanaWeb3.LAMPORTS_PER_SOL
         });
     }
@@ -71,47 +75,50 @@ const fetchTxs = async (pubKey, limit, lastTxHash) => {
     return txs;
 }
 
-const calcBalanceChanges = async (tx, pubKey) => {
+const calcBalanceChanges = async (tx, pubKey, ownedAccounts) => {
     let solBalanceChange = calcSolBalanceChange(tx, pubKey);
-    let tokenBalanceChange = await calcTokenBalanceChange(tx);
+    let tokenBalanceChange = await calcTokenBalanceChange(tx, ownedAccounts);
 
     return [...solBalanceChange, ...tokenBalanceChange];
 }
 
-const calcTokenBalanceChange = async (tx) => {
+const calcTokenBalanceChange = async (tx, ownedAccounts) => {
     let postBalances = tx.meta.postTokenBalances;
     let preBalances = tx.meta.preTokenBalances;
     let tickers = await getTokens();
 
-    let maxBalancesLength = Math.max(postBalances.length, preBalances.length);
-    let diff = [];
-    for (let i = 0; i <= maxBalancesLength; i++) {
-        let postBalance = postBalances[i];
-        let preBalance = preBalances[i];
+    return tx.transaction.message.accountKeys.map((x, i) => {
+        let owned = ownedAccounts.value.find(y => y.pubkey.toString() === x.pubkey.toString());
 
-        if (!postBalance || !preBalance)
-            continue;
+        if (!owned)
+            return null;
 
-        let postTokenAmount = postBalance.uiTokenAmount.amount;
-        let preTokenAmount = preBalance.uiTokenAmount.amount;
-        let decimals = postBalance.uiTokenAmount.decimals;
-        let address = postBalance.mint;
+        let postTokenBalance = postBalances.find(y => y.accountIndex === i);
+        let preTokenBalance = preBalances.find(y => y.accountIndex === i);
 
-        if (preTokenAmount !== postTokenAmount)
-            diff.push({ 
-                changeAmount: (postTokenAmount - preTokenAmount) / Math.pow(10, decimals), 
-                ticker: tickers.find(x => x.address === address)?.symbol 
-            });
-    }
+        if (!postTokenBalance || !preTokenBalance)
+            return null;
 
-    return diff;
+        let postAmount = new BigNumber(postTokenBalance.uiTokenAmount.amount);
+        let preAmount = new BigNumber(preTokenBalance.uiTokenAmount.amount);
+        let decimals = postTokenBalance.uiTokenAmount.decimals || preTokenBalance.uiTokenAmount.decimals;
+        let tokenAddress = postTokenBalance.mint || preTokenBalance.mint;
+
+        let changeAmount = postAmount.minus(preAmount).dividedBy(Math.pow(10, decimals));
+
+        if (changeAmount.isZero())
+            return null;
+
+        let ticker = tickers.find(y => y.address === tokenAddress)?.symbol
+        return { changeAmount: changeAmount.toString(), ticker };
+    }).filter(x => x);
 }
 
 const calcSolBalanceChange = (tx, pubKey) => {
     let accountIndex = tx.transaction.message.accountKeys.findIndex(x => x.pubkey.toString() === pubKey.toString());
     let solDiff = (tx.meta.postBalances[accountIndex] - tx.meta.preBalances[accountIndex]) + tx.meta.fee;
 
-    return [ { ticker: "SOL", changeAmount: solDiff / solanaWeb3.LAMPORTS_PER_SOL }];
+    return solDiff === 0 ? [] : [{ ticker: "SOL", changeAmount: solDiff / solanaWeb3.LAMPORTS_PER_SOL }];
 }
 
 

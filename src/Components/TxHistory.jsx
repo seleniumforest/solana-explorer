@@ -50,8 +50,11 @@ function TxHistory({ pubKey, txs, loadMoreBtnClick }) {
     );
 }
 
-const shortString = (str, start = 4, end = 4) => `${str.slice(0, start)}...${str.slice(str.length - end, str.length)}`;
+const shortString = (str, start = 4, end = 4) => 
+    `${str.slice(0, start)}...${str.slice(str.length - end, str.length)}`;
 
-const composeBalanceString = (balances) => balances?.map(x => `${x.changeAmount > 0 ? "+" : "-"}${Math.abs(x.changeAmount)} ${x.ticker}`).join(" / ");
+const composeBalanceString = (balances) => balances
+    ?.map(x => `${x.changeAmount > 0 ? "+" : "-"}${Math.abs(x.changeAmount)} ${x.ticker}`) //+1 whUST
+    .join(" / ");
 
 export default TxHistory;

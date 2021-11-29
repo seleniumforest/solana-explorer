@@ -29,7 +29,6 @@ const tryParsePubkey = (pubkey) => {
     }
     catch (e) {
         console.warn("Incorrect wallet");
-        return;
     }
 }
 
